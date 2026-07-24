@@ -14,46 +14,38 @@ def is_admin():
         return False
 
 if not is_admin():
-    print("[!] يا برو، لازم تشغل السكريبت كـ Administrator!")
+    print("[!] Bro, you must run this script as Administrator!")
     ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, __file__, None, 1)
     sys.exit()
 
-def backup_and_spoof():
-    print("[+] جارٍ توليد بصمة جديدة وتطبيق التغييرات القوية...")
+def generate_new_spoof():
+    print("\n[+] Generating heavy new hardware fingerprint and applying changes...")
     
-    # توليد قيم جديدة كلياً
+    # Generate unique fake hardware identifiers
     new_guid = str(uuid.uuid4())
     new_comp_name = f"PC-{uuid.uuid4().hex[:6].upper()}"
     
-    # حفظ البصمة القديمة أو الجديدة في ملف احتياطي (Backup)
+    # Save the generated backup state
     backup_data = {
         "MachineGuid": new_guid,
         "ComputerName": new_comp_name
     }
     with open(BACKUP_FILE, "w") as f:
         json.dump(backup_data, f, indent=4)
-    print([f"[✓] تم حفظ تفاصيل البصمة الاحتياطية في: {BACKUP_FILE}"])
+    print(f"[✓] Backup configuration safely saved to: {BACKUP_FILE}")
 
-    # 1. تغيير الـ MachineGuid في الريجستري
+    # 1. Change MachineGuid in Registry
     reg_path = r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography"
     cmd_guid = f'reg add "{reg_path}" /v MachineGuid /t REG_SZ /d "{new_guid}" /f'
     subprocess.run(cmd_guid, shell=True)
-    print(f"[✓] تم تغيير MachineGuid إلى: {new_guid}")
+    print(f"[✓] MachineGuid successfully spoofed to: {new_guid}")
 
-    # 2. تغيير اسم الكمبيوتر (Computer Name)
+    # 2. Change Computer Name
     cmd_name = f'wmic computersystem where name="%computername%" rename name="{new_comp_name}"'
     subprocess.run(cmd_name, shell=True)
-    print(f"[✓] تم تغيير اسم الجهاز إلى: {new_comp_name}")
+    print(f"[✓] Computer Name successfully changed to: {new_comp_name}")
 
-    # 3. تغيير Volume ID للقرص C (سيريال الهاردسك الوهمي)
-    # بنولد رقم عشوائي بصيغة XXXX-XXXX
-    rand_serial = f"{uuid.uuid4().hex[:4].upper()}-{uuid.uuid4().hex[:4].upper()}"
-    cmd_vol = f'vol c: {rand_serial}' # ملاحظة: يتطلب أداة VolId أو التلاعب عبر الريجستري للـ VolumeSerial
-    # كبديل أقوى للريجستري الخاص بالهاردسك:
-    disk_reg = r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
-    print(f"[✓] تم تحديث بصمة الهاردسك الوهمية بنجاح.")
-
-    # 4. تنظيف عميق لمخلفات وحزم الألعاب المؤقتة
+    # 3. Deep clean tracking caches and temp files
     appdata = os.environ.get('LOCALAPPDATA', '')
     temp_path = os.environ.get('TEMP', '')
     targets = [
@@ -64,12 +56,48 @@ def backup_and_spoof():
         if os.path.exists(target):
             try:
                 subprocess.run(f'rd /s /q "{target}"', shell=True)
-                print(f"[x] تم مسح الكاش من: {target}")
+                print(f"[x] Cleared cache from: {target}")
             except:
                 pass
 
-    print("\n[🔥] تمت العملية بنجاح يا وحش! البصمة الجديدة تشتعل وقوية جداً.")
-    print("[!] يرجى عمل Restart فوري للـ VM لتطبيق اسم الجهاز الجديد والريجستري.")
+    print("\n[🔥] Success, bro! Heavy spoofing applied completely.")
+    print("[!] Please restart your VM immediately to apply changes fully.")
+
+def restore_spoof():
+    if not os.path.exists(BACKUP_FILE):
+        print(f"\n[!] Error: No backup file found at '{BACKUP_FILE}'!")
+        return
+
+    print(f"\n[+] Reading backup configuration from {BACKUP_FILE}...")
+    with open(BACKUP_FILE, "r") as f:
+        data = json.load(f)
+
+    restored_guid = data.get("MachineGuid")
+    
+    # Restore MachineGuid
+    reg_path = r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography"
+    cmd_guid = f'reg add "{reg_path}" /v MachineGuid /t REG_SZ /d "{restored_guid}" /f'
+    subprocess.run(cmd_guid, shell=True)
+    print(f"[✓] Restored MachineGuid to: {restored_guid}")
+    print("\n[✓] Restoration complete! Please restart your VM.")
+
+def main_menu():
+    os.system('cls' if os.name == 'nt' else 'clear')
+    print("==========================================")
+    print("       ADVANCED VM HWID SPOOFER           ")
+    print("==========================================")
+    print("[1] Apply New Heavy Spoof (Generate/Update)")
+    print("[2] Restore from Backup")
+    print("==========================================")
+    
+    choice = input("Select an option [1 or 2]: ").strip()
+    
+    if choice == "1":
+        generate_new_spoof()
+    elif choice == "2":
+        restore_spoof()
+    else:
+        print("[!] Invalid option, bro. Try again.")
 
 if __name__ == "__main__":
-    backup_and_spoof()
+    main_menu()
