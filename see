@@ -1,1 +1,85 @@
-Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\Microsoft\Cryptography" -Name "MachineGuid"
+import winreg
+import uuid
+import os
+import stat
+
+# تحديد اسم ملف النسخة الاحتياطية ومسار الريجستري
+BACKUP_FILE = "guid_original_backup.txt"
+KEY_PATH = r"SOFTWARE\Microsoft\Cryptography"
+
+def get_current_guid():
+    # وظيفة لقراءة الرقم من الريجستري
+    try:
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, KEY_PATH, 0, winreg.KEY_READ)
+        value, _ = winreg.QueryValueEx(key, "MachineGuid")
+        winreg.CloseKey(key)
+        return value
+    except Exception as e:
+        print(f"[-] Error reading GUID: {e}")
+        return None
+
+def secure_backup():
+    # وظيفة تتأكد من وجود النسخة الاحتياطية وحمايتها
+    if not os.path.exists(BACKUP_FILE):
+        print("[*] No backup found. Creating one now...")
+        original_guid = get_current_guid()
+        
+        if original_guid:
+            # إنشاء الملف وكتابة الرقم الأصلي
+            with open(BACKUP_FILE, "w") as f:
+                f.write(original_guid)
+            
+            # قفل الملف وجعله للقراءة فقط (Read-Only) لحمايته من أي تعديل
+            os.chmod(BACKUP_FILE, stat.S_IREAD)
+            print(f"[+] Original GUID saved and LOCKED in {BACKUP_FILE}")
+    else:
+        print(f"[!] Backup file '{BACKUP_FILE}' found. It is locked and safe.")
+
+def set_guid(new_guid):
+    # وظيفة لتغيير الرقم في الريجستري
+    try:
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, KEY_PATH, 0, winreg.KEY_ALL_ACCESS)
+        winreg.SetValueEx(key, "MachineGuid", 0, winreg.REG_SZ, new_guid)
+        winreg.CloseKey(key)
+        return True
+    except PermissionError:
+        print("[-] Error: Permission Denied! (لازم تشغل VS Code كمسؤول)")
+        return False
+    except Exception as e:
+        print(f"[-] Error setting GUID: {e}")
+        return False
+
+def spoof_action():
+    # عملية توليد رقم وهمي وتعيينه
+    new_guid = str(uuid.uuid4())
+    if set_guid(new_guid):
+        print(f"[+] Spoofed successfully, Bro! New GUID: {new_guid}")
+
+def restore_action():
+    # عملية قراءة الرقم الأصلي من الملف المحمي واسترجاعه
+    if os.path.exists(BACKUP_FILE):
+        with open(BACKUP_FILE, "r") as f:
+            original_guid = f.read().strip()
+        if set_guid(original_guid):
+            print(f"[+] Restored successfully! GUID is back to the ORIGINAL: {original_guid}")
+    else:
+        print("[-] Error: No backup file found to restore from!")
+
+if __name__ == "__main__":
+    print("--- Advanced HWID Spoofer by LOAI ---")
+    
+    # تأمين النسخة الاحتياطية تلقائياً أول ما يشتغل السكربت
+    secure_backup()
+    
+    print("\n1. Spoof (عمل رقم وهمي جديد)")
+    print("2. Restore (الرجوع للرقم الأصلي من الملف المحمي)")
+    print("-------------------------------------")
+    
+    choice = input("Choose an option (1 or 2): ")
+    
+    if choice == '1':
+        spoof_action()
+    elif choice == '2':
+        restore_action()
+    else:
+        print("[-] Invalid choice! اختر 1 أو 2 فقط.")
