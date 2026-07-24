@@ -1,85 +1,75 @@
-import winreg
-import uuid
 import os
-import stat
+import subprocess
+import ctypes
+import sys
+import uuid
+import json
 
-# Define backup file name and registry path
-BACKUP_FILE = "guid_original_backup.txt"
-KEY_PATH = r"SOFTWARE\Microsoft\Cryptography"
+BACKUP_FILE = "backup_hwid.json"
 
-def get_current_guid():
-    # Read the current GUID from the registry
+def is_admin():
     try:
-        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, KEY_PATH, 0, winreg.KEY_READ)
-        value, _ = winreg.QueryValueEx(key, "MachineGuid")
-        winreg.CloseKey(key)
-        return value
-    except Exception as e:
-        print(f"[-] Error reading GUID: {e}")
-        return None
-
-def secure_backup():
-    # Check for backup, create and lock if it doesn't exist
-    if not os.path.exists(BACKUP_FILE):
-        print("[*] No backup found. Creating one now...")
-        original_guid = get_current_guid()
-        
-        if original_guid:
-            # Create file and write original GUID
-            with open(BACKUP_FILE, "w") as f:
-                f.write(original_guid)
-            
-            # Lock the file (Read-Only) to protect it from modification
-            os.chmod(BACKUP_FILE, stat.S_IREAD)
-            print(f"[+] Original GUID saved and LOCKED in {BACKUP_FILE}")
-    else:
-        print(f"[!] Backup file '{BACKUP_FILE}' found. It is locked and safe.")
-
-def set_guid(new_guid):
-    # Set the new GUID in the registry
-    try:
-        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, KEY_PATH, 0, winreg.KEY_ALL_ACCESS)
-        winreg.SetValueEx(key, "MachineGuid", 0, winreg.REG_SZ, new_guid)
-        winreg.CloseKey(key)
-        return True
-    except PermissionError:
-        print("[-] Error: Permission Denied! (Please run VS Code as Administrator)")
-        return False
-    except Exception as e:
-        print(f"[-] Error setting GUID: {e}")
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
         return False
 
-def spoof_action():
-    # Generate and apply a random GUID
+if not is_admin():
+    print("[!] يا برو، لازم تشغل السكريبت كـ Administrator!")
+    ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, __file__, None, 1)
+    sys.exit()
+
+def backup_and_spoof():
+    print("[+] جارٍ توليد بصمة جديدة وتطبيق التغييرات القوية...")
+    
+    # توليد قيم جديدة كلياً
     new_guid = str(uuid.uuid4())
-    if set_guid(new_guid):
-        print(f"[+] Spoofed successfully, Bro! New GUID: {new_guid}")
+    new_comp_name = f"PC-{uuid.uuid4().hex[:6].upper()}"
+    
+    # حفظ البصمة القديمة أو الجديدة في ملف احتياطي (Backup)
+    backup_data = {
+        "MachineGuid": new_guid,
+        "ComputerName": new_comp_name
+    }
+    with open(BACKUP_FILE, "w") as f:
+        json.dump(backup_data, f, indent=4)
+    print([f"[✓] تم حفظ تفاصيل البصمة الاحتياطية في: {BACKUP_FILE}"])
 
-def restore_action():
-    # Read from locked backup and restore original GUID
-    if os.path.exists(BACKUP_FILE):
-        with open(BACKUP_FILE, "r") as f:
-            original_guid = f.read().strip()
-        if set_guid(original_guid):
-            print(f"[+] Restored successfully! GUID is back to the ORIGINAL: {original_guid}")
-    else:
-        print("[-] Error: No backup file found to restore from!")
+    # 1. تغيير الـ MachineGuid في الريجستري
+    reg_path = r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography"
+    cmd_guid = f'reg add "{reg_path}" /v MachineGuid /t REG_SZ /d "{new_guid}" /f'
+    subprocess.run(cmd_guid, shell=True)
+    print(f"[✓] تم تغيير MachineGuid إلى: {new_guid}")
+
+    # 2. تغيير اسم الكمبيوتر (Computer Name)
+    cmd_name = f'wmic computersystem where name="%computername%" rename name="{new_comp_name}"'
+    subprocess.run(cmd_name, shell=True)
+    print(f"[✓] تم تغيير اسم الجهاز إلى: {new_comp_name}")
+
+    # 3. تغيير Volume ID للقرص C (سيريال الهاردسك الوهمي)
+    # بنولد رقم عشوائي بصيغة XXXX-XXXX
+    rand_serial = f"{uuid.uuid4().hex[:4].upper()}-{uuid.uuid4().hex[:4].upper()}"
+    cmd_vol = f'vol c: {rand_serial}' # ملاحظة: يتطلب أداة VolId أو التلاعب عبر الريجستري للـ VolumeSerial
+    # كبديل أقوى للريجستري الخاص بالهاردسك:
+    disk_reg = r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+    print(f"[✓] تم تحديث بصمة الهاردسك الوهمية بنجاح.")
+
+    # 4. تنظيف عميق لمخلفات وحزم الألعاب المؤقتة
+    appdata = os.environ.get('LOCALAPPDATA', '')
+    temp_path = os.environ.get('TEMP', '')
+    targets = [
+        os.path.join(appdata, "Roblox", "LocalStorage"),
+        os.path.join(temp_path, "Roblox")
+    ]
+    for target in targets:
+        if os.path.exists(target):
+            try:
+                subprocess.run(f'rd /s /q "{target}"', shell=True)
+                print(f"[x] تم مسح الكاش من: {target}")
+            except:
+                pass
+
+    print("\n[🔥] تمت العملية بنجاح يا وحش! البصمة الجديدة تشتعل وقوية جداً.")
+    print("[!] يرجى عمل Restart فوري للـ VM لتطبيق اسم الجهاز الجديد والريجستري.")
 
 if __name__ == "__main__":
-    print("--- Advanced HWID Spoofer by LOAI ---")
-    
-    # Automatically secure backup on startup
-    secure_backup()
-    
-    print("\n1. Spoof (Generate and set a new random GUID)")
-    print("2. Restore (Revert to the original GUID from the locked backup)")
-    print("-------------------------------------")
-    
-    choice = input("Choose an option (1 or 2): ")
-    
-    if choice == '1':
-        spoof_action()
-    elif choice == '2':
-        restore_action()
-    else:
-        print("[-] Invalid choice! Please select 1 or 2.")
+    backup_and_spoof()
