@@ -1,2 +1,36 @@
-https://www.capcut.com/capcut_pc_web/fission_receive?code=9YsYnI23840259&lng=en
-Download Visual C++ Redistributables 2015-2022
+import winreg
+import uuid
+
+def generate_random_guid():
+    # توليد رقم تعريفي عشوائي جديد
+    return str(uuid.uuid4())
+
+def change_machine_guid():
+    try:
+        # مسار الـ MachineGuid في الريجستري
+        key_path = r"SOFTWARE\Microsoft\Cryptography"
+        
+        # فتح المسار بصلاحيات التعديل
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path, 0, winreg.KEY_ALL_ACCESS)
+        
+        # إنشاء الرقم الجديد
+        new_guid = generate_random_guid()
+        
+        # استبدال الرقم القديم بالجديد
+        winreg.SetValueEx(key, "MachineGuid", 0, winreg.REG_SZ, new_guid)
+        
+        # إغلاق المسار لحفظ التعديلات
+        winreg.CloseKey(key)
+        
+        print("[+] Success, Bro!")
+        print(f"[+] New MachineGuid is: {new_guid}")
+        
+    except PermissionError:
+        print("[-] Error: Permission Denied!")
+        print("[-] لازم تشغل VS Code أو الـ CMD كمسؤول (Run as Administrator)")
+    except Exception as e:
+        print(f"[-] Error occurred: {e}")
+
+if __name__ == "__main__":
+    print("--- Educational HWID Spoofer Started ---")
+    change_machine_guid()
