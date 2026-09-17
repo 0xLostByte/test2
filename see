@@ -1,3 +1,1 @@
-INTEL - 6040000
-ALaska - 1072009
-ASUS, Inc. - 10000
+reg add "HKEY_LOCAL_MACHINE\HARDWARE\DESCRIPTION\System" /v SystemBiosVersion /t REG_MULTI_SZ /d "ALaska - 1072009\0American Megatrends Inc. 1.00" /f
